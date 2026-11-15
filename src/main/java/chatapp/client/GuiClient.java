@@ -1,7 +1,5 @@
 package chatapp.client;
 
-import chatapp.common.Protocol;
-import chatapp.server.Server;
 
 import javax.swing.*;
 import java.awt.*;
@@ -87,7 +85,7 @@ public class GuiClient extends JFrame {
 
     private void connect() {
         JTextField hostF = new JTextField("localhost");
-        JTextField portF = new JTextField(String.valueOf(Server.DEFAULT_PORT));
+        JTextField portF = new JTextField(String.valueOf(Protocol.DEFAULT_PORT));
         JTextField nickF = new JTextField();
         Object[] form = {"Server:", hostF, "Cổng:", portF, "Nickname:", nickF};
         while (true) {
@@ -128,6 +126,7 @@ public class GuiClient extends JFrame {
         String t = LocalTime.now().withNano(0).toString();
         switch (f[0]) {
             case "CHAT":   append("[" + t + "] " + f[2] + ": " + f[3]); break;
+            case "HISTORY": append("[" + f[2] + "] " + f[3] + ": " + f[4]); break;
             case "PM":     append("[" + t + "] (riêng) " + f[1] + " -> " + f[2] + ": " + f[3]); break;
             case "SYSTEM": append("* " + f[2]); break;
             case "INFO":   append("* " + f[1]); break;

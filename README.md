@@ -1,4 +1,3 @@
-
 # Multi-room Chat System (Java)
 
 Bài tập lớn môn Lập trình mạng: hệ thống chat nhiều phòng theo mô hình Client–Server, dùng TCP socket, đa luồng và WebSocket. Chỉ dùng JDK 11 trở lên, không cần thư viện ngoài.
@@ -12,25 +11,43 @@ Bài tập lớn môn Lập trình mạng: hệ thống chat nhiều phòng theo
 
 > Nếu NetBeans hỏi JDK: dùng JDK 11 trở lên (**Tools → Java Platforms**).
 
-## Cấu trúc project
+## Cấu trúc project và phân công
+
+Mỗi file chỉ có **một chủ sở hữu**, mỗi người chỉ sửa file của mình để không xung đột khi gộp code.
 
 ```
 ChatSystem/
-├── pom.xml
+├── pom.xml                              TV1
+├── .gitignore                           TV1
+├── PROTOCOL.md                          TV2  (đặc tả giao thức)
+├── README.md                            TV3
 └── src/main/
     ├── java/chatapp/
-    │   ├── server/
-    │   │   ├── Server.java          Nhận kết nối TCP, quản lý người dùng, phòng, broadcast
-    │   │   └── ClientHandler.java   Một luồng cho mỗi client: đọc lệnh, xử lý, phản hồi
-    │   ├── common/
-    │   │   └── Protocol.java        Chuyển lệnh /join, /pm... thành lệnh gửi lên server
-    │   ├── client/
-    │   │   ├── CliClient.java       Client dòng lệnh
-    │   │   └── GuiClient.java       Client Swing
-    │   └── web/
-    │       └── WebServer.java       HTTP + cầu nối WebSocket -> chat server (bản web)
-    └── resources/web/index.html     Giao diện web (HTML/CSS/JS thuần)
+    │   ├── server/                      TV1 - Server & Connection
+    │   │   ├── Server.java                  Nhận kết nối TCP, thread pool, ghi log
+    │   │   └── ClientHandler.java           Một luồng/client: đọc, ghi socket, dọn dẹp khi ngắt kết nối
+    │   ├── web/                         TV1
+    │   │   └── WebServer.java               HTTP + cầu nối WebSocket -> chat server
+    │   ├── logic/                       TV2 - Room Management & Messaging
+    │   │   ├── ChatUser.java                Hợp đồng giữa tầng mạng và tầng logic
+    │   │   ├── RoomManager.java             Người dùng, phòng, broadcast, tin nhắn riêng
+    │   │   └── CommandProcessor.java        Phân tích lệnh NICK/JOIN/MSG/PM...
+    │   └── client/                      TV3 - Client
+    │       ├── CliClient.java               Client dòng lệnh
+    │       ├── GuiClient.java               Client Swing
+    │       └── Protocol.java                Dịch lệnh /join, /pm... thành lệnh gửi server
+    └── resources/web/                   TV3
+        ├── index.html, style.css, app.js    Giao diện web
 ```
+
+Quan hệ phụ thuộc: `client` độc lập hoàn toàn (nói chuyện với server qua socket); `server` dùng `logic` thông qua hợp đồng `ChatUser` + `CommandProcessor`; `web` dùng `server`.
+
+### Quy tắc làm việc nhóm
+
+- Mỗi người một nhánh (`tv1-network`, `tv2-logic`, `tv3-client`), chỉ sửa file của mình, xong tạo Pull Request vào `main`.
+- `git pull` trước khi bắt đầu làm và trước khi push.
+- Muốn đổi hợp đồng (`ChatUser`, chữ ký `CommandProcessor`, `PROTOCOL.md`) thì báo cả nhóm trước.
+- Cần sửa file của người khác thì nhờ chủ file hoặc tạo issue, đừng sửa trực tiếp.
 
 ## Các cách chạy
 
@@ -66,46 +83,18 @@ Muốn chat qua nhiều máy: người khác mở `http://<IP-máy-bạn>:8080` 
 
 Trên GUI/web: nhấp vào phòng để vào, nhấp vào tên người dùng để nhắn riêng.
 
-## Giao thức (text, mỗi dòng một thông điệp, UTF-8)
-
-Client → Server: `NICK <tên>`, `JOIN <phòng>`, `LEAVE`, `MSG <nd>`, `PM <tên> <nd>`, `ROOMS`, `USERS`, `WATCH`, `QUIT`
-
-Server → Client (các trường cách nhau bằng TAB):
-`INFO`, `ERROR`, `NICKOK`, `JOINED`, `SYSTEM`, `CHAT`, `PM`, `ROOMS`, `USERS`
-
-`WATCH` bật chế độ server tự đẩy danh sách phòng/người dùng mỗi khi có thay đổi (GUI và web dùng).
+Giao thức chi tiết xem [PROTOCOL.md](PROTOCOL.md).
 
 ## Thiết kế
 
 - **Đa luồng**: `ExecutorService` (cached thread pool) cấp một luồng `ClientHandler` cho mỗi kết nối.
-- **Đồng bộ**: trạng thái dùng chung (`users`, `rooms`) được bảo vệ bằng `synchronized` trong `Server`; mỗi client có `send()` đồng bộ riêng để tránh ghi chồng.
-- **Phòng**: mỗi client ở đúng một phòng tại một thời điểm; phòng trống (trừ `lobby`) tự bị xoá.
+- **Tách tầng**: tầng mạng (`server`) chỉ đọc/ghi dòng; tầng logic (`logic`) không biết gì về socket, chỉ làm việc với interface `ChatUser`.
+- **Đồng bộ**: trạng thái dùng chung (`users`, `rooms`) được bảo vệ bằng `synchronized` trong `RoomManager`; mỗi client có `send()` đồng bộ riêng để tránh ghi chồng.
+- **Phòng**: mỗi client ở đúng một phòng tại một thời điểm; phòng đã tạo được giữ lại kể cả khi không còn ai (hiển thị 0 người), và lưu 100 tin gần nhất để phát lại khi vào phòng.
 - **Nickname**: duy nhất, không phân biệt hoa/thường, 2–20 ký tự.
 - **Ngắt kết nối đột ngột**: phát hiện qua `IOException`/EOF, server dọn dẹp và thông báo cho phòng.
 - **Bản web**: `WebServer` tự cài đặt WebSocket (RFC 6455: bắt tay SHA-1/Base64, đọc frame có mask, gửi frame text/ping/pong/close). Mỗi kết nối WebSocket mở một kết nối TCP riêng tới chat server nên trình duyệt hoạt động như một client bình thường.
 
 ## Hướng mở rộng
 
-Lưu lịch sử chat vào file/DB, mật khẩu cho phòng, gửi file, mã hoá TLS (`SSLServerSocket` / `wss://`), chuyển sang NIO.
-
-Bài tập lớn môn Lập trình mạng: Xây dựng multi-room chat system
-
-Công nghệ sử dụng
-- Java
-- TCP Socket
-- Multithreading
-- JSON
-- MySQL 8.0
-- Maven
-
-Phân công công việc
-- TV1: Server & Connection
-- TV2: Room Management & Messaging
-- TV3: Client & Data Management
-
-Các chức năng
-- Đăng nhập bằng username
-- Tạo và tham gia phòng chat
-- Gửi tin nhắn theo phòng
-- Quản lý người dùng online
-- Lưu lịch sử chat
+Lưu lịch sử chat vào file/DB, mật khẩu cho phòng, gửi file/ảnh, mã hoá TLS (`SSLServerSocket` / `wss://`), chuyển sang NIO.

@@ -1,7 +1,5 @@
 package chatapp.client;
 
-import chatapp.common.Protocol;
-import chatapp.server.Server;
 
 import java.io.*;
 import java.net.Socket;
@@ -13,7 +11,7 @@ import java.util.Scanner;
 public class CliClient {
     public static void main(String[] args) throws Exception {
         String host = args.length > 0 ? args[0] : "localhost";
-        int port = args.length > 1 ? Integer.parseInt(args[1]) : Server.DEFAULT_PORT;
+        int port = args.length > 1 ? Integer.parseInt(args[1]) : Protocol.DEFAULT_PORT;
         PrintStream console = new PrintStream(System.out, true, StandardCharsets.UTF_8);
 
         try (Socket socket = new Socket(host, port);
@@ -58,6 +56,7 @@ public class CliClient {
         String t = LocalTime.now().withNano(0).toString();
         switch (f[0]) {
             case "CHAT":   return "[" + t + "][" + f[1] + "] " + f[2] + ": " + f[3];
+            case "HISTORY": return "[" + f[2] + "][" + f[1] + "] " + f[3] + ": " + f[4];
             case "PM":     return "[" + t + "][riêng] " + f[1] + " -> " + f[2] + ": " + f[3];
             case "SYSTEM": return "[" + t + "][" + f[1] + "] * " + f[2];
             case "INFO":   return "* " + f[1];

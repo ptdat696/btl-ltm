@@ -12,7 +12,7 @@ import java.util.HashMap;
 import java.util.Map;
 
 /**
- * Cổng web: phục vụ trang web (HTTP) và cầu nối WebSocket -> chat server TCP.
+ * Cổng web (chủ sở hữu: TV1): phục vụ trang web (HTTP) và cầu nối WebSocket -> chat server TCP.
  * Mỗi kết nối WebSocket mở một kết nối TCP riêng tới chat server, nên trình duyệt
  * hoạt động như một client bình thường (chat chung được với GuiClient/CliClient).
  *
@@ -21,7 +21,6 @@ import java.util.Map;
  */
 public class WebServer {
     private static final String WS_GUID = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11";
-    private static final String INDEX_RESOURCE = "/web/index.html";
 
     public static void main(String[] args) throws Exception {
         int webPort = args.length > 0 ? Integer.parseInt(args[0]) : 8080;
@@ -89,18 +88,26 @@ public class WebServer {
     private static void serveStatic(OutputStream out, String path) throws IOException {
         int q = path.indexOf('?');
         if (q >= 0) path = path.substring(0, q);
+        if (path.equals("/")) path = "/index.html";
         byte[] body = null;
-        if (path.equals("/") || path.equals("/index.html")) {
-            try (InputStream res = WebServer.class.getResourceAsStream(INDEX_RESOURCE)) {
-                if (res != null) body = res.readAllBytes();
+        String type = "text/plain; charset=utf-8";
+        // Chỉ phục vụ file .html/.css/.js nằm trực tiếp trong resources/web (không cho phép dấu '/' thứ hai nên không thoát thư mục được)
+        if (path.matches("/[A-Za-z0-9_.-]+\\.(html|css|js)")) {
+            try (InputStream res = WebServer.class.getResourceAsStream("/web" + path)) {
+                if (res != null) {
+                    body = res.readAllBytes();
+                    type = path.endsWith(".css") ? "text/css; charset=utf-8"
+                         : path.endsWith(".js") ? "text/javascript; charset=utf-8"
+                         : "text/html; charset=utf-8";
+                }
             }
         }
         String status = "200 OK";
         if (body == null) {
             body = "404 Not Found".getBytes(StandardCharsets.UTF_8);
             status = "404 Not Found";
+            type = "text/plain; charset=utf-8";
         }
-        String type = status.startsWith("200") ? "text/html; charset=utf-8" : "text/plain; charset=utf-8";
         out.write(("HTTP/1.1 " + status + "\r\nContent-Type: " + type + "\r\nContent-Length: " + body.length
                 + "\r\nConnection: close\r\n\r\n").getBytes(StandardCharsets.UTF_8));
         out.write(body);
